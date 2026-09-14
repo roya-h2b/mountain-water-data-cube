@@ -9,7 +9,7 @@ STAC_SEARCH_URL = "https://stac.dataspace.copernicus.eu/v1/search"
 DEM_COLLECTION = "cop-dem-glo-30-dged-cog"
 
 
-def discover_dem_tiles():
+def search_dem_tiles():
     """Find Copernicus DEM GLO-30 tiles intersecting the study area."""
 
     bbox = [
@@ -36,29 +36,41 @@ def discover_dem_tiles():
     )
 
     response.raise_for_status()
+    
+    
 
-    data = response.json()
-    features = data.get("features", [])
+    #data = response.json()
+    features = response.json()["features"]
 
     print(f"\nDEM tiles found: {len(features)}")
 
     for feature in features:
         print(f"  - {feature['id']}")
-
-    if features:
-        first = features[0]
-
-        print("\nFirst tile metadata:")
-        print(f"ID: {first['id']}")
-
-        print("\nAvailable assets:")
-        for asset_name, asset_info in first.get("assets", {}).items():
-            print(f"  - {asset_name}")
-            print(f"    href: {asset_info.get('href')}")
-            print(f"    type: {asset_info.get('type')}")
-
     return features
+    
+    
+    
+def print_first_tile_metadata(features):
+
+    """Print metadata for the first discovered DEM tile."""
+
+    if not features:
+        return
+
+    first = features[0]
+
+    print("\nFirst tile metadata:")
+    print(f"ID: {first['id']}")
+
+    print("\nAvailable assets:")
+
+    for asset_name, asset_info in first.get("assets", {}).items():
+        print(f"  - {asset_name}")
+        print(f"    href: {asset_info.get('href')}")
+        print(f"    type: {asset_info.get('type')}")
+
 
 
 if __name__ == "__main__":
-    discover_dem_tiles()
+    features = search_dem_tiles()
+    print_first_tile_metadata(features)

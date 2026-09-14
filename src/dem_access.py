@@ -1,14 +1,17 @@
 """Authenticated access utilities for Copernicus Data Space."""
 
 from getpass import getpass
-
+import numpy as np
 import rasterio
 import requests
 import boto3
 import s3fs
+import time
+from rasterio.windows import from_bounds
 
 from rasterio.session import AWSSession
-
+from pathlib import Path
+from rasterio.windows import from_bounds
 
 TOKEN_URL = (
     "https://identity.dataspace.copernicus.eu/"
@@ -22,9 +25,9 @@ S3_KEYS_URL = (
 S3_ENDPOINT = "eodata.dataspace.copernicus.eu"
 
 TEST_COG_PATH = (
-    "s3://eodata/auxdata/CopDEM_COG/copernicus-dem-30m/"
-    "Copernicus_DSM_COG_10_N45_00_E008_00_DEM/"
-    "Copernicus_DSM_COG_10_N45_00_E008_00_DEM.tif"
+    "eodata/auxdata/CopDEM_COG/copernicus-dem-30m/"
+    "Copernicus_DSM_COG_10_N46_00_E008_00_DEM/"
+    "Copernicus_DSM_COG_10_N46_00_E008_00_DEM.tif"
 )
 
 def get_access_token():
@@ -150,11 +153,142 @@ def inspect_cog(credentials):
         print(f"Data type: {dataset.dtypes}")
         print(f"NoData: {dataset.nodata}")
 
+
+def read_dem_window(credentials):
+    """Read and save a small elevation window from Copernicus DEM."""
+
+    fs = s3fs.S3FileSystem(
+        key=credentials["access_id"],
+        secret=credentials["secret"],
+        client_kwargs={
+            "endpoint_url": "https://eodata.dataspace.copernicus.eu"
+        },
+    )
+
+    west = 8.10
+    south = 46.10
+    east = 8.20
+    north = 46.20
+
+    print("\nReading a real DEM window...")
+    print(f"Bounds: {west}, {south}, {east}, {north}")
+
+    with rasterio.open(
+        TEST_COG_PATH,
+        opener=fs,
+    ) as dataset:
+
+        window = from_bounds(
+            west,
+            south,
+            east,
+            north,
+            transform=dataset.transform,
+        )
+
+        elevation = dataset.read(
+            1,
+            window=window,
+            masked=True,
+        )
+
+        window_transform = dataset.window_transform(window)
+
+        print(f"Window shape: {elevation.shape}")
+
+        valid = elevation.compressed()
+        valid = valid[np.isfinite(valid)]
+
+        print(f"Valid pixels: {valid.size}")
+
+        if valid.size > 0:
+            print(f"Minimum elevation: {valid.min():.2f} m")
+            print(f"Maximum elevation: {valid.max():.2f} m")
+            print(f"Mean elevation: {valid.mean():.2f} m")
+
+        output_path = Path(
+            "data/processed/dem_test_window.tif"
+        )
+
+        output_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        output_data = elevation.filled(np.nan).astype(
+            "float32"
+        )
+
+        profile = dataset.profile.copy()
+
+        profile.update(
+            driver="GTiff",
+            height=output_data.shape[0],
+            width=output_data.shape[1],
+            count=1,
+            dtype="float32",
+            transform=window_transform,
+            nodata=np.nan,
+            compress="deflate",
+        )
+
+        with rasterio.open(
+            output_path,
+            "w",
+            **profile,
+        ) as output:
+            output.write(output_data, 1)
+
+    print(f"Saved DEM window to: {output_path}")
+
+    return output_path
+    
+
+def delete_s3_credentials(access_token, access_id):
+    """Delete temporary Copernicus S3 credentials."""
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+    }
+
+    url = f"{S3_KEYS_URL}/access_id/{access_id}"
+
+    response = requests.delete(
+        url,
+        headers=headers,
+        timeout=60,
+    )
+
+    if response.status_code == 204:
+        print("Temporary S3 credentials deleted.")
+        return
+
+    print(
+        f"Warning: S3 credential cleanup failed "
+        f"with HTTP {response.status_code}."
+    )
+
+
 if __name__ == "__main__":
     token = get_access_token()
 
-    if token:
+    credentials = None
+
+    try:
         credentials = create_s3_credentials(token)
 
-        if credentials:
-            inspect_cog(credentials)
+        print("\nWaiting for S3 credentials to become active...")
+        time.sleep(5)
+
+        inspect_cog(credentials)
+
+        read_dem_window(credentials)
+
+    finally:
+        if credentials is not None:
+            print("\nCleaning up temporary S3 credentials...")
+
+            delete_s3_credentials(
+                token,
+                credentials["access_id"],
+            )
