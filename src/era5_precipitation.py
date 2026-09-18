@@ -7,7 +7,7 @@ import xarray as xr
 from obstore.store import HTTPStore
 from zarr.storage import ObjectStore
 
-from config import STUDY_AREA
+from config import STUDY_AREA, CLIMATE_BUFFER_DEGREES
 
 
 ERA5_LAND_PRECIPITATION_URL = (
@@ -25,6 +25,11 @@ OUTPUT_PATH = Path(
     "data/processed/era5_land_precipitation_monthly_2024.zarr"
 )
 
+
+west = STUDY_AREA["west"] - CLIMATE_BUFFER_DEGREES
+east = STUDY_AREA["east"] + CLIMATE_BUFFER_DEGREES
+south = STUDY_AREA["south"] - CLIMATE_BUFFER_DEGREES
+north = STUDY_AREA["north"] + CLIMATE_BUFFER_DEGREES
 
 def open_precipitation_dataset():
     """Open the ERA5-Land precipitation ARCO Zarr store."""
@@ -61,19 +66,40 @@ def open_precipitation_dataset():
 def subset_precipitation(dataset):
     """Select total precipitation for the study area and analysis period."""
 
-    precipitation = dataset["tp"].sel(
+    subset = dataset["tp"].sel(
         time=slice(START_TIME, END_TIME),
         latitude=slice(
-            STUDY_AREA["south"],
-            STUDY_AREA["north"],
+            south,
+            north,
         ),
         longitude=slice(
-            STUDY_AREA["west"],
-            STUDY_AREA["east"],
+            west,
+            east,
         ),
     )
+    print("\nClimate extraction extent:")
+    print(
+        {
+            "west": west,
+            "south": south,
+            "east": east,
+            "north": north,
+        }
+    )
 
-    return precipitation
+    print("\nSelected latitude range:")
+    print(
+        float(subset.latitude.min()),
+        float(subset.latitude.max()),
+    )
+
+    print("\nSelected longitude range:")
+    print(
+        float(subset.longitude.min()),
+        float(subset.longitude.max()),
+    )
+
+    return subset
 
 
 def convert_to_millimetres(precipitation):

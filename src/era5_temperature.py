@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from config import STUDY_AREA
+from config import STUDY_AREA, CLIMATE_BUFFER_DEGREES
 from era5_access import open_era5_land
 
 
@@ -13,23 +13,46 @@ OUTPUT_PATH = Path(
     "data/processed/era5_land_temperature_monthly_2024.zarr"
 )
 
+west = STUDY_AREA["west"] - CLIMATE_BUFFER_DEGREES
+east = STUDY_AREA["east"] + CLIMATE_BUFFER_DEGREES
+south = STUDY_AREA["south"] - CLIMATE_BUFFER_DEGREES
+north = STUDY_AREA["north"] + CLIMATE_BUFFER_DEGREES
+
+
 
 def subset_temperature(dataset):
-    """Select 2 m temperature for the study area and analysis period."""
-
-    temperature = dataset["t2m"].sel(
+    subset = dataset["t2m"].sel(
         time=slice(START_TIME, END_TIME),
-        latitude=slice(
-            STUDY_AREA["south"],
-            STUDY_AREA["north"],
-        ),
-        longitude=slice(
-            STUDY_AREA["west"],
-            STUDY_AREA["east"],
-        ),
+        latitude=slice(south, north),
+        longitude=slice(west, east),
     )
 
-    return temperature
+    print("\nClimate extraction extent:")
+    print(
+        {
+            "west": west,
+            "south": south,
+            "east": east,
+            "north": north,
+        }
+    )
+
+    print("\nSelected latitude range:")
+    print(
+        float(subset.latitude.min()),
+        float(subset.latitude.max()),
+    )
+
+    print("\nSelected longitude range:")
+    print(
+        float(subset.longitude.min()),
+        float(subset.longitude.max()),
+    )
+
+    return subset
+
+
+
 
 
 def convert_to_celsius(temperature):
@@ -121,7 +144,10 @@ if __name__ == "__main__":
 
         print("\nLoading the subset from the ARCO cloud store...")
         print("This is the only intentional cloud data read.")
+        
 
+        
+        
         # Load once from the cloud.
         t2m.load()
 
