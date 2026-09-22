@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pathlib import Path
 import pandas as pd
-
+from fastapi.responses import FileResponse
 
 
 import geopandas as gpd
@@ -51,7 +51,15 @@ def health():
     return {
         "status": "healthy",
     }
-    
+ 
+
+
+@app.get("/ui", response_class=FileResponse)
+def user_interface():
+    """Serve the glacier climate user interface."""
+    return FileResponse("ui/index.html")
+
+ 
 @app.get("/glaciers")
 def get_glaciers():
     """Return a summary of all glaciers in the study dataset."""

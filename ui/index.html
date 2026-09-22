@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Mountain Water Data Cube</title>
+	
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+            background: #f4f7f9;
+            color: #263238;
+        }
+
+        header {
+            margin-bottom: 35px;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            color: #607d8b;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        select {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .metric {
+            background: #eef3f5;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .metric-label {
+            font-size: 13px;
+            color: #607d8b;
+        }
+
+        .metric-value {
+            font-size: 20px;
+            margin-top: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th {
+            background: #eef3f5;
+        }
+
+        #glacier-details,
+        #climate-section {
+            display: none;
+        }
+		#charts-section {
+			display: none;
+		}
+
+		.chart-title {
+			margin-top: 40px;
+		}
+		.project-summary {
+			line-height: 1.6;
+		}
+
+		.data-flow {
+			margin: 20px 0;
+			padding: 16px;
+			background: #eef3f5;
+			border-radius: 8px;
+			text-align: center;
+			font-weight: bold;
+		}
+
+		.data-flow span {
+			margin: 0 8px;
+		}
+
+		.method-note {
+			color: #546e7a;
+			font-size: 14px;
+		}
+    </style>
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+<header>
+    <h1>Mountain Water Data Cube</h1>
+
+    <div class="subtitle">
+        Reproducible glacier terrain and climate data explorer
+    </div>
+	<div class="subtitle">
+		Glacier terrain and ERA5-Land climate explorer
+	</div>
+</header>
+
+
+<div class="card project-summary">
+
+    <h2>About the Data Cube</h2>
+
+    <p>
+        This interactive explorer integrates glacier geometry,
+        terrain, and climate information for the Upper Rhone
+        region of the Swiss Alps.
+    </p>
+
+    <div class="data-flow">
+        RGI Glacier Inventory
+        <span>+</span>
+        Copernicus DEM
+        <span>+</span>
+        ERA5-Land
+        <span>→</span>
+        Harmonized Data Cube
+        <span>→</span>
+        Glacier API
+    </div>
+
+    <p class="method-note">
+        Monthly ERA5-Land temperature and precipitation are
+        aggregated to individual glaciers using glacier-grid
+        intersection area weighting.
+    </p>
+
+</div>
+
+
+<div class="card">
+
+    <h2>Select Glacier</h2>
+
+    <select id="glacier-select">
+        <option value="">Loading glaciers...</option>
+    </select>
+
+</div>
+
+
+<div class="card" id="glacier-details">
+
+    <h2 id="glacier-name">Glacier</h2>
+
+    <div id="glacier-id"></div>
+
+    <div class="metrics">
+
+        <div class="metric">
+            <div class="metric-label">Area</div>
+            <div class="metric-value" id="area"></div>
+        </div>
+
+        <div class="metric">
+            <div class="metric-label">Mean Elevation</div>
+            <div class="metric-value" id="elevation"></div>
+        </div>
+
+        <div class="metric">
+            <div class="metric-label">Vertical Relief</div>
+            <div class="metric-value" id="relief"></div>
+        </div>
+
+    </div>
+
+</div>
+
+
+<div class="card" id="climate-section">
+
+    <h2>Monthly Climate — 2024</h2>
+
+    <table>
+
+        <thead>
+            <tr>
+                <th>Month</th>
+                <th>Temperature (°C)</th>
+                <th>Precipitation (mm)</th>
+            </tr>
+        </thead>
+
+        <tbody id="climate-table"></tbody>
+
+    </table>
+
+</div>
+
+
+<div class="card" id="charts-section">
+
+    <h2>Climate Time Series — 2024</h2>
+
+    <h3>Monthly Mean Temperature</h3>
+
+    <canvas id="temperature-chart"></canvas>
+
+    <h3 class="chart-title">
+        Monthly Total Precipitation
+    </h3>
+
+    <canvas id="precipitation-chart"></canvas>
+
+</div>
+
+<script>
+
+const glacierSelect = document.getElementById("glacier-select");
+
+let temperatureChart = null;
+let precipitationChart = null;
+
+async function loadGlaciers() {
+
+    const response = await fetch("/glaciers");
+    const data = await response.json();
+
+    glacierSelect.innerHTML =
+        '<option value="">Select a glacier</option>';
+
+    data.glaciers.forEach(glacier => {
+
+        const option = document.createElement("option");
+
+        option.value = glacier.rgi_id;
+
+        option.textContent =
+            glacier.glac_name
+                ? `${glacier.glac_name} — ${glacier.rgi_id}`
+                : glacier.rgi_id;
+
+        glacierSelect.appendChild(option);
+    });
+	
+}
+
+
+async function loadGlacier(rgiId) {
+
+    const glacierResponse =
+        await fetch(`/glaciers/${encodeURIComponent(rgiId)}`);
+
+    const glacier = await glacierResponse.json();
+
+
+    document.getElementById("glacier-name").textContent =
+        glacier.glac_name || "Unnamed Glacier";
+
+    document.getElementById("glacier-id").textContent =
+        glacier.rgi_id;
+
+    document.getElementById("area").textContent =
+        `${Number(glacier.area_km2).toFixed(2)} km²`;
+
+    document.getElementById("elevation").textContent =
+        `${Number(glacier.dem_mean_m).toFixed(0)} m`;
+
+    document.getElementById("relief").textContent =
+        `${Number(glacier.dem_relief_m).toFixed(0)} m`;
+
+    document.getElementById("glacier-details").style.display =
+        "block";
+
+
+    const climateResponse =
+        await fetch(
+            `/glaciers/${encodeURIComponent(rgiId)}/climate`
+        );
+
+    const climate = await climateResponse.json();
+	
+
+	const months = climate.climate.map(
+		record => record.month
+	);
+
+	const temperatures = climate.climate.map(
+		record => record.temperature_c
+	);
+
+	const precipitation = climate.climate.map(
+		record => record.precipitation_mm
+	);
+
+
+	if (temperatureChart) {
+		temperatureChart.destroy();
+	}
+
+	if (precipitationChart) {
+		precipitationChart.destroy();
+	}
+
+
+	const temperatureContext =
+		document
+			.getElementById("temperature-chart")
+			.getContext("2d");
+
+
+	temperatureChart = new Chart(
+		temperatureContext,
+		{
+			type: "line",
+
+			data: {
+				labels: months,
+
+				datasets: [
+					{
+						label: "Temperature (°C)",
+						data: temperatures,
+						        borderColor: "#d32f2f",
+								backgroundColor: "#d32f2f",
+								pointBackgroundColor: "#d32f2f",
+								pointBorderColor: "#d32f2f",
+						tension: 0.25
+					}
+				]
+			},
+
+			options: {
+				responsive: true,
+
+				plugins: {
+					legend: {
+						display: true
+					}
+				},
+
+				scales: {
+					y: {
+						title: {
+							display: true,
+							text: "Temperature (°C)"
+						}
+					},
+
+					x: {
+						title: {
+							display: true,
+							text: "Month"
+						}
+					}
+				}
+			}
+		}
+	);
+
+
+	const precipitationContext =
+		document
+			.getElementById("precipitation-chart")
+			.getContext("2d");
+
+
+	precipitationChart = new Chart(
+		precipitationContext,
+		{
+			type: "bar",
+
+			data: {
+				labels: months,
+
+				datasets: [
+					{
+						label: "Precipitation (mm)",
+						data: precipitation
+					}
+				]
+			},
+
+			options: {
+				responsive: true,
+
+				plugins: {
+					legend: {
+						display: true
+					}
+				},
+
+				scales: {
+					y: {
+						beginAtZero: true,
+
+						title: {
+							display: true,
+							text: "Precipitation (mm)"
+						}
+					},
+
+					x: {
+						title: {
+							display: true,
+							text: "Month"
+						}
+					}
+				}
+			}
+		}
+	);
+
+
+	document.getElementById("charts-section").style.display =
+		"block";
+	
+	
+	
+	
+	
+	
+
+    const table =
+        document.getElementById("climate-table");
+
+    table.innerHTML = "";
+
+
+    climate.climate.forEach(record => {
+
+        const row = document.createElement("tr");
+
+        row.innerHTML = `
+            <td>${record.month}</td>
+            <td>${record.temperature_c.toFixed(2)}</td>
+            <td>${record.precipitation_mm.toFixed(2)}</td>
+        `;
+
+        table.appendChild(row);
+    });
+
+
+    document.getElementById("climate-section").style.display =
+        "block";
+}
+
+
+glacierSelect.addEventListener("change", event => {
+
+    const rgiId = event.target.value;
+
+    if (rgiId) {
+        loadGlacier(rgiId);
+    }
+});
+
+
+loadGlaciers();
+
+</script>
+
+</body>
+</html>
