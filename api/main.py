@@ -1,8 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from pathlib import Path
 import pandas as pd
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
+from fastapi.staticfiles import StaticFiles
+
+import json
 
 import geopandas as gpd
 from fastapi import FastAPI
@@ -14,6 +17,13 @@ app = FastAPI(
         "ERA5-Land climate data."
     ),
     version="0.1.0",
+)
+
+
+app.mount(
+    "/ui-static",
+    StaticFiles(directory="ui"),
+    name="ui-static",
 )
 
 GLACIERS_PATH = Path(
@@ -85,7 +95,29 @@ def get_glaciers():
         "glaciers": records,
     }
     
-    
+ 
+@app.get("/glaciers/geojson")
+def get_glaciers_geojson():
+    """Return glacier geometries and selected attributes as GeoJSON."""
+
+    glaciers = load_glaciers()
+
+    columns = [
+        "rgi_id",
+        "glac_name",
+        "area_km2",
+        "dem_mean_m",
+        "dem_relief_m",
+        "geometry",
+    ]
+
+    glacier_map = glaciers[columns].copy()
+
+    return JSONResponse(
+        content=json.loads(glacier_map.to_json())
+    )
+
+ 
 @app.get("/glaciers/{rgi_id}")
 def get_glacier(rgi_id: str):
     """Return information for one glacier."""
@@ -164,3 +196,5 @@ def get_glacier_climate(rgi_id: str):
         ),
         "climate": monthly_data,
     }
+    
+    
