@@ -28,7 +28,9 @@ The interactive explorer provides map-based glacier selection and links glacier 
 <p align="center">
   <img src="docs/images/explorer_map.jpg" width="90%" alt="Interactive glacier map with Grosser Aletsch Glacier selected">
 </p>
+
 ---
+
 ## Workflow
 
 ```text
@@ -119,7 +121,7 @@ For each selected glacier, the interface reports terrain attributes derived from
 The monthly glacier-level climate data are also presented as interactive temperature and precipitation time series.
 
 <p align="center">
-  <img src="docs/images/explorer_climate_timeseries.jpg" width="85%" alt="Monthly temperature and precipitation time series for Grosser Aletsch Glacier">
+  <img src="docs/images/glacier_climate_timeseries.jpg" width="85%" alt="Monthly temperature and precipitation time series for Grosser Aletsch Glacier">
 </p>
 
 ### ERA5-Land
@@ -351,6 +353,7 @@ mountain-water-data-cube/
 ```
 
 The `src/` modules separate data acquisition, preprocessing, DEM processing, ERA5-Land processing, data-cube construction, glacier-climate integration, quality assurance, analysis, and visualization.
+
 ---
 
 ## Technologies
