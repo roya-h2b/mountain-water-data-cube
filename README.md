@@ -21,7 +21,7 @@ The source datasets differ substantially in data model, spatial resolution, temp
 The current implementation focuses on the Upper Rhône region of the Swiss Alps.
 
 ---
-## Interactive Glacier Explorer
+## Project Preview
 
 The interactive explorer provides map-based glacier selection and links glacier geometry to terrain and climate information.
 
@@ -163,7 +163,7 @@ This provides a compact multidimensional representation suitable for reproducibl
 
 ERA5-Land has a substantially coarser spatial resolution than individual glacier geometries. Therefore, the project does not spatially downscale ERA5-Land to glacier-scale resolution.
 
-Instead, a representative monthly climate value is derived for each glacier by area-weighting the ERA5-Land grid cells intersecting its polygon
+Instead, a representative monthly climate value is derived for each glacier by area-weighting the ERA5-Land grid cells intersecting its polygon.
 
 For glacier \(g\) and climate variable \(X\):
 
@@ -375,11 +375,10 @@ The project uses:
 
 **Cloud and remote data access**
 - S3-compatible object storage
-- Cloud Optimized GeoTIFF
 - ECMWF ARCO Zarr
 - HTTP-based geospatial services
 
-**Data access and visualization**
+**API and interactive visualization**
 - FastAPI
 - Leaflet
 - Chart.js
